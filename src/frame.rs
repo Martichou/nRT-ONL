@@ -67,9 +67,6 @@ fn update_state_rxtx(state: &SharedState, source_mac: &MacAddr, interface: &Netw
             .as_micros();
         let now_truncated = now_unix as usize;
 
-        info!("Normal Unix: {}", now_unix);
-        info!("Trunca Unix: {}", now_truncated);
-
         if source_mac == &rmac {
             trace!(">>>>> PKT outgoing");
             state.last_tx_pkt.store(now_truncated, Ordering::Relaxed);

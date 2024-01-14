@@ -109,7 +109,6 @@ impl Onl {
                 let rx_pkt = cstate.last_rx_pkt.load(Ordering::Relaxed);
                 let tx_pkt = cstate.last_tx_pkt.load(Ordering::Relaxed);
                 let abs_diff = rx_pkt.abs_diff(tx_pkt);
-                info!("Absdiff: {}µs", abs_diff);
 
                 match current {
                     State::Up | State::Ukn => {
