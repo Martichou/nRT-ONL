@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::{env, process};
 
 use n_rt_onl::Onl;
@@ -7,7 +10,7 @@ use n_rt_onl::Onl;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define log level
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "TRACE")
+        std::env::set_var("RUST_LOG", "DEBUG")
     }
 
     // Init logger/tracing
@@ -21,11 +24,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let onl = Onl::new(iface_name)?;
+    let onl = Onl::new(iface_name, None)?;
     let mut receiver = onl.start()?;
 
     while let Some(e) = receiver.recv().await {
-        dbg!("Got an event: {:?}", e);
+        info!("Got an event: {:?}", e);
     }
 
     Ok(())
