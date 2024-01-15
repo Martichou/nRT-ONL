@@ -3,8 +3,6 @@ use std::net::IpAddr;
 use bitflags::bitflags;
 use pnet::packet::tcp::TcpPacket;
 
-use crate::{frame::PacketDirection, GLOBAL_STATE};
-
 trait TcpFlagExt {
     fn get_rflags(&self) -> TcpFlag;
 }
@@ -30,26 +28,9 @@ impl<'a> TcpFlagExt for TcpPacket<'a> {
     }
 }
 
-pub fn handle_tcp_packet(
-    direction: PacketDirection,
-    interface_name: &str,
-    source: IpAddr,
-    destination: IpAddr,
-    packet: &[u8],
-) {
+pub fn handle_tcp_packet(interface_name: &str, source: IpAddr, destination: IpAddr, packet: &[u8]) {
     let tcp = TcpPacket::new(packet);
     if let Some(tcp) = tcp {
-        let flags = tcp.get_rflags();
-        if flags.contains(TcpFlag::ACK) {
-            if direction == PacketDirection::Sending {
-                let mut lgbl = GLOBAL_STATE.ack_store.lock().unwrap();
-                lgbl.add_ack(tcp.get_sequence());
-            } else if direction == PacketDirection::Receiving {
-                let mut lgbl = GLOBAL_STATE.ack_store.lock().unwrap();
-                lgbl.remove_ack(tcp.get_sequence());
-            }
-        }
-
         trace!(
             "[{}]: TCP Packet({:?} : {}): {}:{} > {}:{}; length: {}",
             interface_name,

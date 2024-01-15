@@ -1,6 +1,6 @@
-use std::sync::{atomic::AtomicUsize, Mutex};
+use std::sync::atomic::AtomicUsize;
 
-use crate::utils::{get_now_truncated, AckStore};
+use crate::utils::get_now_truncated;
 
 #[derive(Debug)]
 pub(crate) struct SharedData {
@@ -8,8 +8,6 @@ pub(crate) struct SharedData {
     // can be truncated to fit in Usize.
     pub last_rx_pkt: AtomicUsize,
     pub last_tx_pkt: AtomicUsize,
-
-    pub ack_store: Mutex<AckStore>,
 }
 
 impl Default for SharedData {
@@ -17,7 +15,6 @@ impl Default for SharedData {
         SharedData {
             last_rx_pkt: get_now_truncated().into(),
             last_tx_pkt: get_now_truncated().into(),
-            ack_store: Mutex::new(AckStore::new()),
         }
     }
 }

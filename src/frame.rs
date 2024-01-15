@@ -60,7 +60,7 @@ fn update_state_rxtx(direction: &PacketDirection) {
 }
 
 fn handle_transport_protocol(
-    direction: PacketDirection,
+    _direction: PacketDirection,
     interface_name: &str,
     source: IpAddr,
     destination: IpAddr,
@@ -78,7 +78,7 @@ fn handle_transport_protocol(
             );
         }
         IpNextHeaderProtocols::Tcp => {
-            tcp::handle_tcp_packet(direction, interface_name, source, destination, packet)
+            tcp::handle_tcp_packet(interface_name, source, destination, packet)
         }
         IpNextHeaderProtocols::Icmp => {
             icmp::handle_icmp_packet(interface_name, source, destination, packet)
