@@ -1,25 +1,23 @@
 #[macro_use]
 extern crate log;
 
-use std::{
-    io::Error,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
+use std::{io::Error, sync::atomic::Ordering, thread, time::Duration};
 
+use once_cell::sync::Lazy;
 use pnet::{
     datalink::{self, Channel::Ethernet, NetworkInterface},
     packet::ethernet::EthernetPacket,
 };
+use shared_data::SharedData;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 mod frame;
 mod icmp;
+mod shared_data;
 mod tcp;
+mod utils;
+
+static GLOBAL_STATE: Lazy<SharedData> = Lazy::new(SharedData::default);
 
 #[derive(Debug, PartialEq)]
 pub enum State {
@@ -27,14 +25,6 @@ pub enum State {
     Ukn,
     Down,
     Up,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct SharedState {
-    // last_xx_pkt is the Unix time in micros.
-    // can be truncated to fit in Usize.
-    last_rx_pkt: AtomicUsize,
-    last_tx_pkt: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -90,13 +80,7 @@ impl Onl {
             Err(e) => return Err(e),
         };
 
-        // The task handling packets need write access
-        // to the shared state. While the analysis only
-        // need read access.
-        let state: Arc<SharedState> = Arc::new(SharedState::default());
-
         // Clone the object we need in our task (those that needs to be).
-        let cstate = state.clone();
         let cch_tx = self.ch.0.clone();
         // Task to launch analysis as per packets info
         tokio::spawn(async move {
@@ -106,22 +90,22 @@ impl Onl {
             loop {
                 let start_overall = std::time::Instant::now();
 
-                let rx_pkt = cstate.last_rx_pkt.load(Ordering::Relaxed);
-                let tx_pkt = cstate.last_tx_pkt.load(Ordering::Relaxed);
+                let rx_pkt = GLOBAL_STATE.last_rx_pkt.load(Ordering::SeqCst);
+                let tx_pkt = GLOBAL_STATE.last_tx_pkt.load(Ordering::SeqCst);
                 let abs_diff = rx_pkt.abs_diff(tx_pkt);
 
                 match current {
                     State::Up | State::Ukn => {
                         // If the diff is bigger than 1s
                         if abs_diff > self.config.rxtx_threshold {
-                            debug!("Down here");
+                            info!("abs_diff was: {}", abs_diff);
                             _ = cch_tx.send(State::Down).await;
                             current = State::Down;
                         }
                     }
                     State::Down => {
                         if abs_diff < self.config.rxtx_threshold {
-                            debug!("Up here");
+                            info!("abs_diff was: {}", abs_diff);
                             _ = cch_tx.send(State::Up).await;
                             current = State::Up;
                         }
@@ -147,7 +131,6 @@ impl Onl {
                 match rx.next() {
                     Ok(packet) => {
                         frame::handle_ethernet_frame(
-                            state.as_ref(),
                             &self.iface,
                             &EthernetPacket::new(packet).unwrap(),
                         );

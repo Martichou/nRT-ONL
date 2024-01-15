@@ -1,6 +1,5 @@
 use std::net::IpAddr;
 use std::sync::atomic::Ordering;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use pnet::datalink::NetworkInterface;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
@@ -10,9 +9,58 @@ use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::Packet;
 use pnet::util::MacAddr;
 
-use crate::{frame, icmp, tcp, SharedState};
+use crate::utils::{get_now_truncated, Ipv6Ext};
+use crate::{frame, icmp, tcp, GLOBAL_STATE};
+
+#[derive(Debug, PartialEq)]
+pub enum PacketDirection {
+    Sending,
+    Receiving,
+    Unknown,
+}
+
+fn get_direction(source_mac: &MacAddr, interface: &NetworkInterface) -> PacketDirection {
+    let mac = interface.mac;
+    if let Some(rmac) = mac {
+        if source_mac == &rmac {
+            return PacketDirection::Sending;
+        } else {
+            return PacketDirection::Receiving;
+        }
+    }
+
+    PacketDirection::Unknown
+}
+
+fn update_state_rxtx(direction: &PacketDirection) {
+    if direction == &PacketDirection::Unknown {
+        return;
+    }
+
+    let now_truncated: usize = get_now_truncated();
+    trace!("{}: update_state_rxtx: {:?}", now_truncated, direction);
+    match direction {
+        PacketDirection::Sending => {
+            GLOBAL_STATE
+                .last_tx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+        }
+        PacketDirection::Receiving => {
+            // For each incoming packet, we suppose the network is "sane"
+            // so "reset" last_tx_pkt.
+            GLOBAL_STATE
+                .last_tx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+            GLOBAL_STATE
+                .last_rx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+        }
+        _ => {}
+    }
+}
 
 fn handle_transport_protocol(
+    direction: PacketDirection,
     interface_name: &str,
     source: IpAddr,
     destination: IpAddr,
@@ -30,7 +78,7 @@ fn handle_transport_protocol(
             );
         }
         IpNextHeaderProtocols::Tcp => {
-            tcp::handle_tcp_packet(interface_name, source, destination, packet)
+            tcp::handle_tcp_packet(direction, interface_name, source, destination, packet)
         }
         IpNextHeaderProtocols::Icmp => {
             icmp::handle_icmp_packet(interface_name, source, destination, packet)
@@ -53,35 +101,7 @@ fn handle_transport_protocol(
     }
 }
 
-fn update_state_rxtx(state: &SharedState, source_mac: &MacAddr, interface: &NetworkInterface) {
-    let mac = interface.mac;
-
-    // Determine if the packet is RX or TX
-    // TODO - Only update if the outgoing packet is correct
-    //		  otherwise, a no-response is expected.
-    // TODO - Make a distinction between LAN/WAN packets.
-    if let Some(rmac) = mac {
-        let now_unix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_micros();
-        let now_truncated = now_unix as usize;
-
-        if source_mac == &rmac {
-            trace!(">>>>> PKT outgoing");
-            state.last_tx_pkt.store(now_truncated, Ordering::Relaxed);
-        } else {
-            trace!("<<<<< PKT incoming");
-            // For each incoming packet, we suppose the network is "sane"
-            // so "reset" last_tx_pkt.
-            state.last_tx_pkt.store(now_truncated, Ordering::Relaxed);
-            state.last_rx_pkt.store(now_truncated, Ordering::Relaxed);
-        }
-    }
-}
-
 pub(crate) fn handle_ipv4_packet(
-    state: &SharedState,
     source_mac: &MacAddr,
     interface: &NetworkInterface,
     ethernet: &EthernetPacket,
@@ -89,25 +109,40 @@ pub(crate) fn handle_ipv4_packet(
     let interface_name = &interface.name;
     let header = Ipv4Packet::new(ethernet.payload());
     if let Some(header) = header {
-        // Only update if the packet is not "local"
-        if !header.get_source().is_private() {
-            update_state_rxtx(state, source_mac, interface);
+        let protocol = header.get_next_level_protocol();
+        let direction = get_direction(source_mac, interface);
+
+        // Don't handle local packet (if source is private and packet is receving; or if dest is private)
+        if (header.get_source().is_private() && direction == PacketDirection::Receiving)
+            || (header.get_source().is_private() && header.get_destination().is_private())
+        {
+            trace!(
+                "[{}]: Don't handle local packets: {} > {}",
+                interface_name,
+                header.get_source(),
+                header.get_destination()
+            );
+            return;
+        }
+
+        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending) {
+            update_state_rxtx(&direction);
         }
 
         handle_transport_protocol(
+            direction,
             interface_name,
             IpAddr::V4(header.get_source()),
             IpAddr::V4(header.get_destination()),
-            header.get_next_level_protocol(),
+            protocol,
             header.payload(),
         );
     } else {
-        trace!("[{}]: Malformed IPv4 Packet", interface_name);
+        error!("[{}]: Malformed IPv4 Packet", interface_name);
     }
 }
 
 pub(crate) fn handle_ipv6_packet(
-    state: &SharedState,
     source_mac: &MacAddr,
     interface: &NetworkInterface,
     ethernet: &EthernetPacket,
@@ -115,32 +150,45 @@ pub(crate) fn handle_ipv6_packet(
     let interface_name = &interface.name;
     let header = Ipv6Packet::new(ethernet.payload());
     if let Some(header) = header {
-        // Only update if the packet is not "local"
-        // TODO - Once is_unicast_link_local is stable, use it
-        update_state_rxtx(state, source_mac, interface);
+        let protocol = header.get_next_header();
+        let direction = get_direction(source_mac, interface);
+
+        // Don't handle local packet (if source is private and packet is receving; or if dest is private)
+        if (header.get_source().is_link_local() && direction == PacketDirection::Receiving)
+            || (header.get_source().is_link_local() && header.get_destination().is_link_local())
+        {
+            trace!(
+                "[{}]: Don't handle local packets: {} > {}",
+                interface_name,
+                header.get_source(),
+                header.get_destination()
+            );
+            return;
+        }
+
+        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending) {
+            update_state_rxtx(&direction);
+        }
 
         handle_transport_protocol(
+            direction,
             interface_name,
             IpAddr::V6(header.get_source()),
             IpAddr::V6(header.get_destination()),
-            header.get_next_header(),
+            protocol,
             header.payload(),
         );
     } else {
-        trace!("[{}]: Malformed IPv6 Packet", interface_name);
+        error!("[{}]: Malformed IPv6 Packet", interface_name);
     }
 }
 
-pub(crate) fn handle_ethernet_frame(
-    state: &SharedState,
-    interface: &NetworkInterface,
-    ethernet: &EthernetPacket,
-) {
+pub(crate) fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPacket) {
     let source_mac = ethernet.get_source();
 
     match ethernet.get_ethertype() {
-        EtherTypes::Ipv4 => frame::handle_ipv4_packet(state, &source_mac, interface, ethernet),
-        EtherTypes::Ipv6 => frame::handle_ipv6_packet(state, &source_mac, interface, ethernet),
+        EtherTypes::Ipv4 => frame::handle_ipv4_packet(&source_mac, interface, ethernet),
+        EtherTypes::Ipv6 => frame::handle_ipv6_packet(&source_mac, interface, ethernet),
         _ => {}
     }
 }
