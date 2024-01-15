@@ -12,9 +12,7 @@ use shared_data::SharedData;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 mod frame;
-mod icmp;
 mod shared_data;
-mod tcp;
 mod utils;
 
 static GLOBAL_STATE: Lazy<SharedData> = Lazy::new(SharedData::default);
