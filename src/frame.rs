@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 
 use pnet::datalink::NetworkInterface;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::Packet;
@@ -10,6 +10,13 @@ use pnet::util::MacAddr;
 
 use crate::utils::{get_now_truncated, Ipv6Ext};
 use crate::{frame, GLOBAL_STATE};
+
+const ALLOWED_PROTOCOL: [IpNextHeaderProtocol; 4] = [
+    IpNextHeaderProtocols::Udp,
+    IpNextHeaderProtocols::Icmp,
+    IpNextHeaderProtocols::Icmpv6,
+    IpNextHeaderProtocols::Tcp,
+];
 
 #[derive(Debug, PartialEq)]
 pub enum PacketDirection {
@@ -37,7 +44,6 @@ fn update_state_rxtx(direction: &PacketDirection) {
     }
 
     let now_truncated: usize = get_now_truncated();
-    trace!("{}: update_state_rxtx: {:?}", now_truncated, direction);
     match direction {
         PacketDirection::Sending => {
             GLOBAL_STATE
@@ -82,7 +88,15 @@ pub(crate) fn handle_ipv4_packet(
             return;
         }
 
-        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending) {
+        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending)
+            && ALLOWED_PROTOCOL.contains(&protocol)
+        {
+            trace!(
+                "{}: update_state_rxtx: {} - {:?}",
+                get_now_truncated(),
+                protocol,
+                direction
+            );
             update_state_rxtx(&direction);
         }
     } else {
@@ -114,7 +128,15 @@ pub(crate) fn handle_ipv6_packet(
             return;
         }
 
-        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending) {
+        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending)
+            && ALLOWED_PROTOCOL.contains(&protocol)
+        {
+            trace!(
+                "{}: update_state_rxtx: {} - {:?}",
+                get_now_truncated(),
+                protocol,
+                direction
+            );
             update_state_rxtx(&direction);
         }
     } else {

@@ -96,14 +96,14 @@ impl Onl {
                     State::Up | State::Ukn => {
                         // If the diff is bigger than 1s
                         if abs_diff > self.config.rxtx_threshold {
-                            info!("abs_diff was: {}", abs_diff);
+                            debug!("abs_diff was: {}", abs_diff);
                             _ = cch_tx.send(State::Down).await;
                             current = State::Down;
                         }
                     }
                     State::Down => {
                         if abs_diff < self.config.rxtx_threshold {
-                            info!("abs_diff was: {}", abs_diff);
+                            debug!("abs_diff was: {}", abs_diff);
                             _ = cch_tx.send(State::Up).await;
                             current = State::Up;
                         }
@@ -113,7 +113,6 @@ impl Onl {
 
                 // If the state is still Ukn, this means we're Up.
                 if current == State::Ukn {
-                    debug!("Was Ukn");
                     _ = cch_tx.send(State::Up).await;
                     current = State::Up;
                 }
