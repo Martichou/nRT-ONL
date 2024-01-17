@@ -1,0 +1,8 @@
+{
+	"rust-analyzer.linkedProjects": ["Cargo.toml", "n-rt-onl-ebpf/Cargo.toml"],
+	"rust-analyzer.checkOnSave.allTargets": false,
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--target",
+        "thumbv7m-none-eabi"
+    ]
+}

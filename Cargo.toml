@@ -1,24 +1,2 @@
-[package]
-name = "n_rt_onl"
-version = "0.1.0"
-edition = "2021"
-
-[[example]]
-name = "onl"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[profile.release]
-lto = true
-opt-level = 3
-codegen-units = 1
-
-[dependencies]
-bitflags = "2.4"
-pnet = "0.34"
-tokio = { version = "1.35", features = ["sync", "macros", "rt-multi-thread"] }
-log = "0.4"
-once_cell = "1.19.0"
-
-[dev-dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+[workspace]
+members = ["xtask", "n-rt-onl", "n-rt-onl-common"]
