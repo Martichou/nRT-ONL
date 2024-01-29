@@ -1,2 +1,3 @@
 [workspace]
 members = ["xtask", "n-rt-onl", "n-rt-onl-common"]
+resolver = "2"

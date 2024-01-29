@@ -5,6 +5,7 @@ use anyhow::Context;
 use aya::programs::{Xdp, XdpFlags};
 use aya::{include_bytes_aligned, maps::HashMap, Bpf};
 use aya_log::BpfLogger;
+use fastping_rs::Pinger;
 use pnet::datalink::{self, NetworkInterface};
 use std::io::Error;
 use std::time::Duration;
@@ -27,15 +28,23 @@ pub enum State {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The MAX time difference in µs between RX/TX packets.
-    /// Default to 1s (1000000µs).
-    rxtx_threshold: u64,
+    /// The MAX time difference in ns between RX/TX packets.
+    /// Default to 1.5s (1500000000ns).
+    pub rxtx_threshold: u64,
+
+    /// Determine if the library will send ICMP to specified
+    /// servers as a sanity check for pkts reception. If your
+    /// server/machine is already handling a lots of packets,
+    /// this may not be necessary. Otherwise, it is recommended
+    /// to avoid false positive
+    pub icmp_targets: Option<Vec<String>>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            rxtx_threshold: 1000000,
+            rxtx_threshold: 1500000000,
+            icmp_targets: None,
         }
     }
 }
@@ -99,6 +108,26 @@ impl Onl {
         program.attach(&self.iface_name, XdpFlags::default())
 			.context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
 
+        // If some targets for icmp are specified, run the pinger
+        // Note: we don't care about the result, the eBPF prog will take care
+        // of that part.
+        if let Some(targets) = self.config.icmp_targets {
+            tokio::spawn(async move {
+                let (pinger, results) = match Pinger::new(Some(1000), Some(32)) {
+                    Ok((pinger, results)) => (pinger, results),
+                    Err(e) => panic!("Error creating pinger: {}", e),
+                };
+
+                for t in targets {
+                    pinger.add_ipaddr(&t);
+                }
+
+                pinger.run_pinger();
+
+                while results.recv().is_ok() {}
+            });
+        }
+
         tokio::spawn(async move {
             let bpf_map = self.bpf.map_mut("PKT_TIMESTAMP").unwrap();
             let pkt_timestamp = HashMap::<_, u8, u64>::try_from(bpf_map).unwrap();
@@ -113,7 +142,10 @@ impl Onl {
                 let tx_pkt = pkt_timestamp.get(&1, 0).unwrap_or_default();
                 let abs_diff = rx_pkt.abs_diff(tx_pkt);
 
-                debug!("Running check: {} <= {} - {}", abs_diff, rx_pkt, tx_pkt);
+                debug!(
+                    "Running check: Abs[{}] vs Threshold[{})]",
+                    abs_diff, self.config.rxtx_threshold
+                );
                 match current {
                     State::Up | State::Ukn => {
                         // If the diff is bigger than 1s

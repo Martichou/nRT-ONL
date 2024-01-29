@@ -8,15 +8,14 @@ use aya_bpf::{
 	maps::HashMap,
 	programs::XdpContext
 };
-use aya_log_ebpf::trace;
+use aya_log_ebpf::{trace, debug};
 
 use core::mem;
 use network_types::{
-    eth::{EthHdr, EtherType},
-    ip::{IpProto, Ipv4Hdr},
-    tcp::TcpHdr,
-    udp::UdpHdr,
+    eth::{EthHdr, EtherType}, ip::{IpProto, Ipv4Hdr}
 };
+
+static SUPPORTED_SENT_PROTO: [IpProto; 4] = [IpProto::Tcp, IpProto::Udp, IpProto::Icmp, IpProto::Ipv6Icmp];
 
 #[map]
 static PKT_TIMESTAMP: HashMap<u8, u64> = HashMap::<u8, u64>::with_max_entries(2, 0);
@@ -76,24 +75,19 @@ fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
 		return Ok(xdp_action::XDP_PASS);
 	}
 
-	let protocol_hdr_offset = EthHdr::LEN + Ipv4Hdr::LEN;
 	let protocol = unsafe { (*ipv4_hdr).proto };
-    let (source_port, dest_port) = match protocol {
-        IpProto::Tcp => {
-            let tcp_hdr: *const TcpHdr = ptr_at(&ctx, protocol_hdr_offset)?;
-            (u16::from_be(unsafe { (*tcp_hdr).source }), u16::from_be(unsafe { (*tcp_hdr).dest }))
-        }
-        IpProto::Udp => {
-            let udp_hdr: *const UdpHdr = ptr_at(&ctx, protocol_hdr_offset)?;
-            (u16::from_be(unsafe { (*udp_hdr).source }), u16::from_be(unsafe { (*udp_hdr).dest }))
-        }
-		// If the Proto is not managed, PASS
-        _ => return Ok(xdp_action::XDP_PASS),
-    };
 
-	if is_sending {
+	if !SUPPORTED_SENT_PROTO.contains(&protocol) {
+		debug!(
+			&ctx,
+			"Unsupported protocol: {}",
+			protocol as u8
+		);
+	}
+
+	if is_sending && SUPPORTED_SENT_PROTO.contains(&protocol) {
 		let _ = PKT_TIMESTAMP.insert(&1, unsafe { &bpf_ktime_get_ns() }, 0);
-	} else {
+	} else if !is_sending {
 		// For each incoming packet, we suppose the network is "sane" so "reset" last_tx_pkt.
 		let _ = PKT_TIMESTAMP.insert(&0, unsafe { &bpf_ktime_get_ns() }, 0);
 		let _ = PKT_TIMESTAMP.insert(&1, unsafe { &bpf_ktime_get_ns() }, 0);
@@ -101,13 +95,11 @@ fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
 
 	trace!(
 		&ctx,
-		"{} - {} Packet: {:i}:{} > {:i}:{}",
-		if protocol == IpProto::Tcp { "Tcp" } else { "Udp" },
+		"{} - {} Packet: {:i} > {:i}",
+		protocol as u8,
 		is_sending as u8,
 		source_addr,
-		source_port,
 		dest_addr,
-		dest_port,
 	);
 
     Ok(xdp_action::XDP_PASS)

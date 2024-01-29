@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use n_rt_onl::Onl;
+use n_rt_onl::{Config, Onl};
 use std::{env, process};
 
 #[tokio::main]
@@ -9,7 +9,7 @@ use std::{env, process};
 async fn main() -> Result<(), anyhow::Error> {
     // Define log level
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "DEBUG")
+        std::env::set_var("RUST_LOG", "INFO")
     }
 
     // Init logger/tracing
@@ -23,7 +23,13 @@ async fn main() -> Result<(), anyhow::Error> {
         }
     };
 
-    let onl = Onl::new(iface_name, None)?;
+    let onl = Onl::new(
+        iface_name,
+        Some(Config {
+            icmp_targets: Some(vec![String::from("1.1.1.1")]),
+            ..Default::default()
+        }),
+    )?;
     let mut receiver = onl.start()?;
 
     while let Some(e) = receiver.recv().await {
