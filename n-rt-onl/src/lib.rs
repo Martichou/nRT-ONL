@@ -38,6 +38,7 @@ pub struct Config {
     /// this may not be necessary. Otherwise, it is recommended
     /// to avoid false positive
     pub icmp_targets: Option<Vec<String>>,
+    pub icmp_interval: Option<u64>,
 }
 
 impl Default for Config {
@@ -45,6 +46,7 @@ impl Default for Config {
         Config {
             rxtx_threshold: 1500000000,
             icmp_targets: None,
+            icmp_interval: None,
         }
     }
 }
@@ -113,7 +115,7 @@ impl Onl {
         // of that part.
         if let Some(targets) = self.config.icmp_targets {
             tokio::spawn(async move {
-                let (pinger, results) = match Pinger::new(Some(1000), Some(32)) {
+                let (pinger, results) = match Pinger::new(self.config.icmp_interval, Some(32)) {
                     Ok((pinger, results)) => (pinger, results),
                     Err(e) => panic!("Error creating pinger: {}", e),
                 };

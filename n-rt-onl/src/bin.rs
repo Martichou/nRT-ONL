@@ -27,6 +27,7 @@ async fn main() -> Result<(), anyhow::Error> {
         iface_name,
         Some(Config {
             icmp_targets: Some(vec![String::from("1.1.1.1")]),
+            icmp_interval: Some(1000),
             ..Default::default()
         }),
     )?;
