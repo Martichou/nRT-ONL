@@ -56,8 +56,14 @@ fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
 
 	// If the packet is a Ipv4, continue, otherwise, PASS
     match unsafe { (*eth_hdr).ether_type } {
-        EtherType::Ipv4 => {}
-        _ => return Ok(xdp_action::XDP_PASS),
+        EtherType::Ipv4 => {},
+        _ => {
+			trace!(
+				&ctx,
+				"Skipping: not Ipv4"
+			);
+			return Ok(xdp_action::XDP_PASS)
+		},
     }
 
     let ipv4_hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN)?;
@@ -72,6 +78,11 @@ fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
 
 	// Don't handle packets if both are private
 	if (source_private && !is_sending) || (source_private && dest_private) {
+		trace!(
+			&ctx,
+			"Skipping: source {}",
+			source_private as u8
+		);
 		return Ok(xdp_action::XDP_PASS);
 	}
 
