@@ -1,8 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use anyhow::Context;
-use aya::programs::{Xdp, XdpFlags};
+use aya::programs::{tc, SchedClassifier, TcAttachType};
 use aya::{include_bytes_aligned, maps::HashMap, Bpf};
 use aya_log::BpfLogger;
 use fastping_rs::Pinger;
@@ -105,10 +104,24 @@ impl Onl {
             warn!("failed to initialize eBPF logger: {}", e);
         }
 
-        let program: &mut Xdp = self.bpf.program_mut("n_rt_onl_ebpf").unwrap().try_into()?;
-        program.load()?;
-        program.attach(&self.iface_name, XdpFlags::default())
-			.context("failed to attach the XDP program with default flags - try changing XdpFlags::default() to XdpFlags::SKB_MODE")?;
+        // error adding clsact to the interface if it is already added is harmless
+        // the full cleanup can be done with 'sudo tc qdisc del dev eth0 clsact'.
+        let _ = tc::qdisc_add_clsact(&self.iface_name);
+        let program_egress: &mut SchedClassifier = self
+            .bpf
+            .program_mut("n_rt_onl_ebpf_egress")
+            .unwrap()
+            .try_into()?;
+        program_egress.load()?;
+        program_egress.attach(&self.iface_name, TcAttachType::Egress)?;
+
+        let program_ingress: &mut SchedClassifier = self
+            .bpf
+            .program_mut("n_rt_onl_ebpf_ingress")
+            .unwrap()
+            .try_into()?;
+        program_ingress.load()?;
+        program_ingress.attach(&self.iface_name, TcAttachType::Ingress)?;
 
         // If some targets for icmp are specified, run the pinger
         // Note: we don't care about the result, the eBPF prog will take care

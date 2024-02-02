@@ -1,5 +1,6 @@
 {
-	// Decomment when working on the eBPF module
+	"rust-analyzer.showUnlinkedFileNotification": false,
+	// // Decomment when working on the eBPF module
 	// "rust-analyzer.linkedProjects": ["./n-rt-onl-ebpf/Cargo.toml"],
 	// "rust-analyzer.check.allTargets": false,
     // "rust-analyzer.check.extraArgs": [

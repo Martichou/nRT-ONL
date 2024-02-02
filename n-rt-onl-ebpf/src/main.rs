@@ -1,19 +1,26 @@
 #![no_std]
 #![no_main]
 
+use core::net::Ipv4Addr;
+
 use aya_bpf::{
 	helpers::bpf_ktime_get_ns,
-	bindings::xdp_action,
-	macros::{xdp, map},
+	bindings::{TC_ACT_PIPE, TC_ACT_SHOT},
+	macros::{classifier, map},
 	maps::HashMap,
-	programs::XdpContext
+	programs::TcContext
 };
 use aya_log_ebpf::{trace, debug};
 
-use core::mem;
 use network_types::{
     eth::{EthHdr, EtherType}, ip::{IpProto, Ipv4Hdr}
 };
+
+#[derive(PartialEq)]
+enum PktDirection {
+    Egress = 0,
+    Ingress,
+}
 
 static SUPPORTED_SENT_PROTO: [IpProto; 4] = [IpProto::Tcp, IpProto::Udp, IpProto::Icmp, IpProto::Ipv6Icmp];
 
@@ -25,75 +32,41 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     unsafe { core::hint::unreachable_unchecked() }
 }
 
-#[inline(always)]
-fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
-    let start = ctx.data();
-    let end = ctx.data_end();
-    let len = mem::size_of::<T>();
+fn try_n_rt_onl_ebpf(ctx: TcContext, dir: PktDirection) -> Result<i32, ()> {
+	let is_sending = dir == PktDirection::Egress;
+	let eth_hdr: EthHdr = ctx.load(0).map_err(|_| ())?;
 
-    if start + offset + len > end {
-        return Err(());
-    }
-
-    Ok((start + offset) as *const T)
-}
-
-#[inline(always)]
-fn is_private(ip: u32) -> bool {
-    let a = (ip >> 24) as u8;
-    let b = (ip >> 16) as u8;
-
-    match a {
-        10 => true,
-        172 if b >= 16 && b <= 31 => true,
-        192 if b == 168 => true,
-        _ => false,
-    }
-}
-
-fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
-    let eth_hdr: *const EthHdr = ptr_at(&ctx, 0)?;
-
-	// If the packet is a Ipv4, continue, otherwise, PASS
-    match unsafe { (*eth_hdr).ether_type } {
+	// If the pkt is a Ipv4, continue, otherwise, PASS
+    match eth_hdr.ether_type {
         EtherType::Ipv4 => {},
         _ => {
-			trace!(
-				&ctx,
-				"Skipping: not Ipv4"
-			);
-			return Ok(xdp_action::XDP_PASS)
+			trace!(&ctx, "Skipping: not Ipv4");
+			return Ok(TC_ACT_PIPE)
 		},
     }
 
-    let ipv4_hdr: *const Ipv4Hdr = ptr_at(&ctx, EthHdr::LEN)?;
-    let source_addr = u32::from_be(unsafe { (*ipv4_hdr).src_addr });
-	let dest_addr = u32::from_be(unsafe { (*ipv4_hdr).dst_addr });
+	let ipv4_hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
+    let source_addr = u32::from_be(ipv4_hdr.src_addr);
+	let dest_addr = u32::from_be(ipv4_hdr.dst_addr);
 
-	let source_private = is_private(source_addr);
-	let dest_private = is_private(dest_addr);
+	let ip4_src = Ipv4Addr::from(source_addr);
+	let ip4_dst = Ipv4Addr::from(dest_addr);
 
-	// TODO - For now assume that if the source IP is private, we're sending a packet
-	let is_sending = source_private;
-
-	// Don't handle packets if both are private
-	if (source_private && !is_sending) || (source_private && dest_private) {
-		trace!(
-			&ctx,
-			"Skipping: source {}",
-			source_private as u8
-		);
-		return Ok(xdp_action::XDP_PASS);
+	// Don't handle pkt if src is private when we're receiving the pkt or if both are private
+	if (ip4_src.is_private() && !is_sending) || (ip4_src.is_private() && ip4_dst.is_private()) {
+		trace!(&ctx, "Skipping: private to private");
+		return Ok(TC_ACT_PIPE);
 	}
 
-	let protocol = unsafe { (*ipv4_hdr).proto };
+	// Don't handle broadcast
+	if ip4_src.is_broadcast() || ip4_dst.is_broadcast() {
+		trace!(&ctx, "Skipping: broadcast");
+		return Ok(TC_ACT_PIPE);
+	}
 
+	let protocol = ipv4_hdr.proto;
 	if !SUPPORTED_SENT_PROTO.contains(&protocol) {
-		debug!(
-			&ctx,
-			"Unsupported protocol: {}",
-			protocol as u8
-		);
+		debug!(&ctx, "Unsupported protocol: {}", protocol as u8);
 	}
 
 	if is_sending && SUPPORTED_SENT_PROTO.contains(&protocol) {
@@ -106,20 +79,27 @@ fn try_n_rt_onl_ebpf(ctx: XdpContext) -> Result<u32, ()> {
 
 	trace!(
 		&ctx,
-		"{} - {} Packet: {:i} > {:i}",
+		"{} - Packet: {:i} > {:i}",
 		protocol as u8,
-		is_sending as u8,
 		source_addr,
 		dest_addr,
 	);
 
-    Ok(xdp_action::XDP_PASS)
+    Ok(TC_ACT_PIPE)
 }
 
-#[xdp]
-pub fn n_rt_onl_ebpf(ctx: XdpContext) -> u32 {
-    match try_n_rt_onl_ebpf(ctx) {
+#[classifier]
+pub fn n_rt_onl_ebpf_ingress(ctx: TcContext) -> i32 {
+    match try_n_rt_onl_ebpf(ctx, PktDirection::Ingress) {
         Ok(ret) => ret,
-        Err(_) => xdp_action::XDP_ABORTED,
+        Err(_) => TC_ACT_SHOT,
+    }
+}
+
+#[classifier]
+pub fn n_rt_onl_ebpf_egress(ctx: TcContext) -> i32 {
+    match try_n_rt_onl_ebpf(ctx, PktDirection::Egress) {
+        Ok(ret) => ret,
+        Err(_) => TC_ACT_SHOT,
     }
 }
