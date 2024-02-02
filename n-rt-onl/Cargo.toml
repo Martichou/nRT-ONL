@@ -11,7 +11,6 @@ path = "src/bin.rs"
 [dependencies]
 aya = { git = "https://github.com/aya-rs/aya", features = ["async_tokio"] }
 aya-log = { git = "https://github.com/aya-rs/aya" }
-n-rt-onl-common = { path = "../n-rt-onl-common", features = ["user"] }
 anyhow = "1"
 libc = "0.2"
 log = "0.4"

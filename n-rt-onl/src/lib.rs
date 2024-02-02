@@ -2,20 +2,13 @@
 extern crate log;
 
 use aya::programs::{tc, SchedClassifier, TcAttachType};
-use aya::{include_bytes_aligned, maps::HashMap, Bpf};
+use aya::{maps::HashMap, Bpf};
 use aya_log::BpfLogger;
 use fastping_rs::Pinger;
 use pnet::datalink::{self, NetworkInterface};
 use std::io::Error;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-
-#[cfg(debug_assertions)]
-static BPF_BYTES: &[u8] =
-    include_bytes_aligned!("../../target/bpfel-unknown-none/debug/n-rt-onl-ebpf");
-#[cfg(not(debug_assertions))]
-static BPF_BYTES: &[u8] =
-    include_bytes_aligned!("../../target/bpfel-unknown-none/release/n-rt-onl-ebpf");
 
 #[derive(Debug, PartialEq)]
 pub enum State {
@@ -27,6 +20,8 @@ pub enum State {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Path to the ebpf program.
+    pub ebpf_prog_path: String,
     /// The MAX time difference in ns between RX/TX packets.
     /// Default to 1.5s (1500000000ns).
     pub rxtx_threshold: u64,
@@ -43,6 +38,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            #[cfg(debug_assertions)]
+            ebpf_prog_path: String::from("../../target/bpfel-unknown-none/debug/n-rt-onl-ebpf"),
+            #[cfg(not(debug_assertions))]
+            ebpf_prog_path: String::from("../../target/bpfel-unknown-none/release/n-rt-onl-ebpf"),
             rxtx_threshold: 1500000000,
             icmp_targets: None,
             icmp_interval: None,
@@ -86,13 +85,15 @@ impl Onl {
         }
 
         let channel = mpsc::channel(100);
+        let config = config.unwrap_or_default();
+        let bpf_path = config.ebpf_prog_path.clone();
 
         Ok(Self {
             event_tx: channel.0,
             event_rx: channel.1,
             iface_name: ifname,
-            config: config.unwrap_or_default(),
-            bpf: Bpf::load(BPF_BYTES).unwrap(),
+            config,
+            bpf: Bpf::load_file(bpf_path).unwrap(),
         })
     }
 

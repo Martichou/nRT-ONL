@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 aya-bpf = { git = "https://github.com/aya-rs/aya" }
 aya-log-ebpf = { git = "https://github.com/aya-rs/aya" }
-n-rt-onl-common = { path = "../n-rt-onl-common" }
 network-types = "0.0.5"
 
 [[bin]]

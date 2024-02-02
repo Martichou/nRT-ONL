@@ -381,18 +381,10 @@ dependencies = [
  "fastping-rs",
  "libc",
  "log",
- "n-rt-onl-common",
  "once_cell",
  "pnet",
  "tokio",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "n-rt-onl-common"
-version = "0.1.0"
-dependencies = [
- "aya",
 ]
 
 [[package]]

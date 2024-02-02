@@ -25,3 +25,8 @@ cargo build
 export RUST_LOG=info
 cargo xtask run
 ```
+
+## Use the library
+
+You can check the [example](examples/nrt_test/). You'll need to download the ebpf program
+and place it somewhere accessible for the user running the binary.
