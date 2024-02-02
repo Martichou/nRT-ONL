@@ -1,0 +1,26 @@
+name: Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+
+# cancel ongoing jobs:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: bpf-linker
+        run: cargo install bpf-linker --git https://github.com/aya-rs/bpf-linker.git
+      - run: cargo build --lib
+      - run: cargo xtask build-ebpf
