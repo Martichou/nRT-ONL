@@ -8,10 +8,10 @@ use std::io::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 mod common;
-#[cfg(target_os = "macos")]
-mod darwin;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod other;
 
 #[derive(Debug, PartialEq)]
 pub enum State {
