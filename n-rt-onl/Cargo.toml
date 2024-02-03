@@ -9,8 +9,6 @@ name = "n-rt-onl"
 path = "src/bin.rs"
 
 [dependencies]
-aya = { git = "https://github.com/aya-rs/aya", features = ["async_tokio"], rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
-aya-log = { git = "https://github.com/aya-rs/aya", rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
 anyhow = "1"
 libc = "0.2"
 log = "0.4"
@@ -19,3 +17,7 @@ tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "net"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = "1.19"
 fastping-rs = "0.2.4"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+aya = { git = "https://github.com/aya-rs/aya", features = ["async_tokio"], rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
+aya-log = { git = "https://github.com/aya-rs/aya", rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
