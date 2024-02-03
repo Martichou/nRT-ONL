@@ -91,6 +91,7 @@ impl Onl {
 
         let channel = mpsc::channel(100);
         let config = config.unwrap_or_default();
+		#[cfg(target_os = "linux")]
         let bpf_path = config.ebpf_prog_path.clone();
 
         Ok(Self {
