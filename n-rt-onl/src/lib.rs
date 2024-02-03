@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 
+#[cfg(target_os = "linux")]
 use aya::Bpf;
 use pnet::datalink::{self, NetworkInterface};
 use std::io::Error;
