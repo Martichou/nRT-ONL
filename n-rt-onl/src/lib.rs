@@ -6,6 +6,7 @@ use pnet::datalink::{self, NetworkInterface};
 use std::io::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
+mod common;
 #[cfg(target_os = "macos")]
 mod darwin;
 #[cfg(target_os = "linux")]

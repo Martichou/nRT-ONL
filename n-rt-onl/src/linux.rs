@@ -1,11 +1,10 @@
 use aya::maps::HashMap;
 use aya::programs::{tc, SchedClassifier, TcAttachType};
 use aya_log::BpfLogger;
-use fastping_rs::Pinger;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 
-use crate::{Onl, State};
+use crate::{common, Onl, State};
 
 impl Onl {
     /// Start the outage notification process.
@@ -39,20 +38,7 @@ impl Onl {
         // Note: we don't care about the result, the eBPF prog will take care
         // of that part.
         if let Some(targets) = self.config.icmp_targets {
-            tokio::spawn(async move {
-                let (pinger, results) = match Pinger::new(self.config.icmp_interval, Some(32)) {
-                    Ok((pinger, results)) => (pinger, results),
-                    Err(e) => panic!("Error creating pinger: {}", e),
-                };
-
-                for t in targets {
-                    pinger.add_ipaddr(&t);
-                }
-
-                pinger.run_pinger();
-
-                while results.recv().is_ok() {}
-            });
+            common::start_pinger(targets, self.config.icmp_interval);
         }
 
         tokio::spawn(async move {
