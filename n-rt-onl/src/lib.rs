@@ -43,9 +43,9 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             #[cfg(all(debug_assertions, target_os = "linux"))]
-            ebpf_prog_path: String::from("../../target/bpfel-unknown-none/debug/n-rt-onl-ebpf"),
+            ebpf_prog_path: String::from("./target/bpfel-unknown-none/debug/n-rt-onl-ebpf"),
             #[cfg(all(not(debug_assertions), target_os = "linux"))]
-            ebpf_prog_path: String::from("../../target/bpfel-unknown-none/release/n-rt-onl-ebpf"),
+            ebpf_prog_path: String::from("./target/bpfel-unknown-none/release/n-rt-onl-ebpf"),
             rxtx_threshold: 1500000000,
             icmp_targets: None,
             icmp_interval: None,
