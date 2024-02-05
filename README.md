@@ -1,6 +1,8 @@
-# n-rt-onl-ebpf
+# n-rt-onl
 
 # Linux
+
+The Linux version use eBPF with TC in order to perform the analysis on the TX/RX packets.
 
 ### Prerequisites
 
@@ -35,3 +37,20 @@ and place it somewhere accessible for the user running the binary.
 
 # macOS and Windows
 
+The macOS and Windows version use pnet's datalink::channel.
+
+### Prerequisites
+
+1. None, just Rust
+
+### Run
+
+```bash
+export RUST_LOG=info
+cargo run
+```
+
+### Use the library
+
+Same as for the Linux (they share the same API), but you don't need to
+specify the eBPF program path.
