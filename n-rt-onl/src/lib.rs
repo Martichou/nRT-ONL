@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 mod common;
 #[cfg(all(target_os = "linux", not(feature = "userspace")))]
 mod ebpf;
-#[cfg(feature = "userspace")]
+#[cfg(any(feature = "userspace", not(target_os = "linux")))]
 mod other;
 
 #[derive(Debug, PartialEq)]

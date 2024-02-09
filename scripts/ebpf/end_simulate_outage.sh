@@ -1,1 +1,3 @@
-sudo tc qdisc del dev wlo1 root
+#!/bin/bash
+
+tc qdisc del dev wlo1 root
