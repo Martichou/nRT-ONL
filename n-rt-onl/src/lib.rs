@@ -78,17 +78,6 @@ impl Onl {
             .into());
         }
 
-        // Bump the memlock rlimit. This is needed for older kernels that don't use the
-        // new memcg based accounting, see https://lwn.net/Articles/837122/
-        let rlim = libc::rlimit {
-            rlim_cur: libc::RLIM_INFINITY,
-            rlim_max: libc::RLIM_INFINITY,
-        };
-        let ret = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlim) };
-        if ret != 0 {
-            debug!("remove limit on locked memory failed, ret is: {}", ret);
-        }
-
         let channel = mpsc::channel(100);
         let config = config.unwrap_or_default();
         #[cfg(all(target_os = "linux", not(feature = "userspace")))]
