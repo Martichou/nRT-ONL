@@ -55,21 +55,17 @@ impl Onl {
                 let tx_pkt = pkt_timestamp.get(&1, 0).unwrap_or_default();
                 let abs_diff = rx_pkt.abs_diff(tx_pkt);
 
-                debug!(
-                    "Running check: Abs[{}] vs Threshold[{})]",
-                    abs_diff, self.config.rxtx_threshold
-                );
                 match current {
                     State::Up | State::Ukn => {
-                        // If the diff is bigger than 1s
-                        if abs_diff > self.config.rxtx_threshold {
+                        // If the diff is bigger than rxtx_threshold (converted to ns)
+                        if abs_diff > (self.config.rxtx_threshold * 10000000) as u64 {
                             info!("State now DOWN");
                             _ = self.event_tx.send(State::Down).await;
                             current = State::Down;
                         }
                     }
                     State::Down => {
-                        if abs_diff < self.config.rxtx_threshold {
+                        if abs_diff < (self.config.rxtx_threshold * 10000000) as u64 {
                             info!("State now UP");
                             _ = self.event_tx.send(State::Up).await;
                             current = State::Up;
@@ -85,7 +81,13 @@ impl Onl {
                 }
 
                 let duration_overall = start_overall.elapsed();
-                std::thread::sleep(Duration::from_secs(1) - duration_overall);
+                // Perform three times more analysis than the rxtx_threshold.
+                // This is to avoid bad race condition where it would take
+                // more time than needed to detect outages.
+                std::thread::sleep(
+                    Duration::from_millis(self.config.rxtx_threshold.div_ceil(3) as u64)
+                        - duration_overall,
+                );
             }
         });
 

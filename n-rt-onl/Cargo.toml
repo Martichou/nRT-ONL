@@ -21,3 +21,7 @@ fastping-rs = "0.2.4"
 [target.'cfg(target_os = "linux")'.dependencies]
 aya = { git = "https://github.com/aya-rs/aya", features = ["async_tokio"], rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
 aya-log = { git = "https://github.com/aya-rs/aya", rev = "0f6a7343926b23190483bed49855fdc9bb10988d" }
+
+[features]
+default = []
+userspace = []

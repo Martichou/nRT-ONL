@@ -1,16 +1,16 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature = "userspace")))]
 use aya::Bpf;
 use pnet::datalink::{self, NetworkInterface};
 use std::io::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 mod common;
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(all(target_os = "linux", not(feature = "userspace")))]
+mod ebpf;
+#[cfg(feature = "userspace")]
 mod other;
 
 #[derive(Debug, PartialEq)]
@@ -23,12 +23,12 @@ pub enum State {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(feature = "userspace")))]
     /// Path to the ebpf program.
     pub ebpf_prog_path: String,
-    /// The MAX time difference in ns between RX/TX packets.
-    /// Default to 1.5s (1500000000ns).
-    pub rxtx_threshold: u64,
+    /// The MAX time difference in ms between RX/TX packets.
+    /// Default to 1500ms (1500000000ns).
+    pub rxtx_threshold: usize,
 
     /// Determine if the library will send ICMP to specified
     /// servers as a sanity check for pkts reception. If your
@@ -42,11 +42,11 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            #[cfg(all(debug_assertions, target_os = "linux"))]
+            #[cfg(all(debug_assertions, target_os = "linux", not(feature = "userspace")))]
             ebpf_prog_path: String::from("./target/bpfel-unknown-none/debug/n-rt-onl-ebpf"),
-            #[cfg(all(not(debug_assertions), target_os = "linux"))]
+            #[cfg(all(not(debug_assertions), target_os = "linux", not(feature = "userspace")))]
             ebpf_prog_path: String::from("./target/bpfel-unknown-none/release/n-rt-onl-ebpf"),
-            rxtx_threshold: 1500000000,
+            rxtx_threshold: 1500,
             icmp_targets: None,
             icmp_interval: None,
         }
@@ -59,7 +59,7 @@ pub struct Onl {
     event_tx: Sender<State>,
     iface_name: String,
     config: Config,
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(feature = "userspace")))]
     bpf: Bpf,
 }
 
@@ -91,7 +91,7 @@ impl Onl {
 
         let channel = mpsc::channel(100);
         let config = config.unwrap_or_default();
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(feature = "userspace")))]
         let bpf_path = config.ebpf_prog_path.clone();
 
         Ok(Self {
@@ -99,7 +99,7 @@ impl Onl {
             event_rx: channel.1,
             iface_name: ifname,
             config,
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", not(feature = "userspace")))]
             bpf: Bpf::load_file(bpf_path).unwrap(),
         })
     }

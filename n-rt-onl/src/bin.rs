@@ -9,7 +9,7 @@ use std::{env, process};
 async fn main() -> Result<(), anyhow::Error> {
     // Define log level
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "INFO")
+        std::env::set_var("RUST_LOG", "TRACE,fastping_rs=INFO")
     }
 
     // Init logger/tracing

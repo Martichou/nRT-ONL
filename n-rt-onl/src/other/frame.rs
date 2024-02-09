@@ -9,7 +9,7 @@ use pnet::util::MacAddr;
 
 use super::{get_now_truncated, imple::GLOBAL_STATE};
 
-const ALLOWED_PROTOCOL: [IpNextHeaderProtocol; 4] = [
+const SUPPORTED_SENT_PROTO: [IpNextHeaderProtocol; 4] = [
     IpNextHeaderProtocols::Udp,
     IpNextHeaderProtocols::Icmp,
     IpNextHeaderProtocols::Icmpv6,
@@ -36,32 +36,6 @@ fn get_direction(source_mac: &MacAddr, interface: &NetworkInterface) -> PacketDi
     PacketDirection::Unknown
 }
 
-fn update_state_rxtx(direction: &PacketDirection) {
-    if direction == &PacketDirection::Unknown {
-        return;
-    }
-
-    let now_truncated: usize = get_now_truncated();
-    match direction {
-        PacketDirection::Sending => {
-            GLOBAL_STATE
-                .last_tx_pkt
-                .store(now_truncated, Ordering::SeqCst);
-        }
-        PacketDirection::Receiving => {
-            // For each incoming packet, we suppose the network is "sane"
-            // so "reset" last_tx_pkt.
-            GLOBAL_STATE
-                .last_tx_pkt
-                .store(now_truncated, Ordering::SeqCst);
-            GLOBAL_STATE
-                .last_rx_pkt
-                .store(now_truncated, Ordering::SeqCst);
-        }
-        _ => {}
-    }
-}
-
 pub(crate) fn handle_ipv4_packet(
     source_mac: &MacAddr,
     interface: &NetworkInterface,
@@ -70,33 +44,51 @@ pub(crate) fn handle_ipv4_packet(
     let interface_name = &interface.name;
     let header = Ipv4Packet::new(ethernet.payload());
     if let Some(header) = header {
-        let protocol = header.get_next_level_protocol();
         let direction = get_direction(source_mac, interface);
+        let is_sending = direction == PacketDirection::Sending;
 
-        // Don't handle local packet (if source is private and packet is receving; or if dest is private)
-        if (header.get_source().is_private() && direction == PacketDirection::Receiving)
-            || (header.get_source().is_private() && header.get_destination().is_private())
-        {
-            trace!(
-                "[{}]: Don't handle local packets: {} > {}",
-                interface_name,
-                header.get_source(),
-                header.get_destination()
-            );
+        let ip4_src = header.get_source();
+        let ip4_dst = header.get_destination();
+
+        // Don't handle pkt if src is private when we're receiving the pkt or if both are private
+        if (ip4_src.is_private() && !is_sending) || (ip4_src.is_private() && ip4_dst.is_private()) {
+            trace!("Skipping: private to private");
             return;
         }
 
-        if !(protocol == IpNextHeaderProtocols::Udp && direction == PacketDirection::Sending)
-            && ALLOWED_PROTOCOL.contains(&protocol)
-        {
-            trace!(
-                "{}: update_state_rxtx: {} - {:?}",
-                get_now_truncated(),
-                protocol,
-                direction
-            );
-            update_state_rxtx(&direction);
+        // Don't handle broadcast
+        if ip4_src.is_broadcast() || ip4_dst.is_broadcast() {
+            trace!("Skipping: broadcast");
+            return;
         }
+
+        let protocol = header.get_next_level_protocol();
+        if !SUPPORTED_SENT_PROTO.contains(&protocol) {
+            debug!("Unsupported protocol: {}", protocol);
+        }
+
+        let now_truncated = get_now_truncated();
+        if is_sending && SUPPORTED_SENT_PROTO.contains(&protocol) {
+            GLOBAL_STATE
+                .last_tx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+        } else if !is_sending {
+            // For each incoming packet, we suppose the network is "sane" so "reset" last_tx_pkt.
+            GLOBAL_STATE
+                .last_tx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+            GLOBAL_STATE
+                .last_rx_pkt
+                .store(now_truncated, Ordering::SeqCst);
+        }
+
+        trace!(
+            "{} -- {} - Packet: {:?} > {:?}",
+            now_truncated,
+            protocol,
+            ip4_src,
+            ip4_dst,
+        );
     } else {
         error!("[{}]: Malformed IPv4 Packet", interface_name);
     }
