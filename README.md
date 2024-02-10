@@ -1,6 +1,18 @@
 # n-rt-onl
 
-# Linux
+**TLDR**: Operating system support:
+
+| Operating System | userspace | ebpf |
+|---|---|---|
+| Windows | yes | no |
+| macOS | yes | no |
+| Linux | yes | yes |
+
+Features:
+- default: eBPF on Linux and userspace on macOS/Windows
+- userspace: userspace on all OSes
+
+# Linux (default - ebpf, userspace available)
 
 The Linux version use eBPF with TC in order to perform the analysis on the TX/RX packets.
 
@@ -35,7 +47,7 @@ cargo xtask run
 You can check the [example](examples/nrt_test/). You'll need to download the ebpf program
 and place it somewhere accessible for the user running the binary.
 
-# macOS and Windows
+# macOS and Windows (only userspace)
 
 The macOS and Windows version use pnet's datalink::channel.
 
