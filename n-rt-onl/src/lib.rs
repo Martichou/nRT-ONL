@@ -4,6 +4,7 @@ extern crate log;
 #[cfg(all(target_os = "linux", not(feature = "userspace")))]
 use aya::Bpf;
 use pnet::datalink::{self, NetworkInterface};
+use serde::{Deserialize, Serialize};
 use std::io::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -13,12 +14,24 @@ mod ebpf;
 #[cfg(any(feature = "userspace", not(target_os = "linux")))]
 mod other;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum State {
     Error,
     Ukn,
     Down,
     Up,
+}
+
+impl From<usize> for State {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => State::Error,
+            1 => State::Ukn,
+            2 => State::Down,
+            3 => State::Up,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

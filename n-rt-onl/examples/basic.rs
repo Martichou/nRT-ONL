@@ -18,7 +18,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let iface_name = match env::args().nth(1) {
         Some(n) => n,
         None => {
-            println!("USAGE: onl <NETWORK INTERFACE>");
+            println!("USAGE: basic <NETWORK INTERFACE>");
             process::exit(1);
         }
     };
@@ -26,7 +26,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let onl = Onl::new(
         iface_name,
         Some(Config {
-			ebpf_prog_path: String::from("/home/martichou/Works/n-rt-onl-ebpf/target/bpfel-unknown-none/release/n-rt-onl-ebpf"),
             icmp_targets: Some(vec![String::from("1.1.1.1")]),
             icmp_interval: Some(1000),
             ..Default::default()

@@ -1,4 +1,5 @@
 mod build_ebpf;
+mod example;
 mod run;
 
 use std::process::exit;
@@ -15,6 +16,7 @@ pub struct Options {
 enum Command {
     BuildEbpf(build_ebpf::Options),
     Run(run::Options),
+    Example(example::Options),
 }
 
 fn main() {
@@ -24,6 +26,7 @@ fn main() {
     let ret = match opts.command {
         BuildEbpf(opts) => build_ebpf::build_ebpf(opts),
         Run(opts) => run::run(opts),
+        Example(opts) => example::run(opts),
     };
 
     if let Err(e) = ret {

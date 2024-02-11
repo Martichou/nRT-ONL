@@ -86,14 +86,14 @@ impl Onl {
                     State::Up | State::Ukn => {
                         // If the diff is bigger than rxtx_threshold
                         if abs_diff > self.config.rxtx_threshold * 1000 {
-                            info!("State now DOWN");
+                            debug!("State now DOWN");
                             _ = cch_tx.send(State::Down).await;
                             current = State::Down;
                         }
                     }
                     State::Down => {
                         if abs_diff < self.config.rxtx_threshold * 1000 {
-                            info!("State now UP");
+                            debug!("State now UP");
                             _ = cch_tx.send(State::Up).await;
                             current = State::Up;
                         }
@@ -103,6 +103,7 @@ impl Onl {
 
                 // If the state is still Ukn, this means we're Up.
                 if current == State::Ukn {
+                    debug!("State now UP");
                     _ = cch_tx.send(State::Up).await;
                     current = State::Up;
                 }
@@ -111,10 +112,11 @@ impl Onl {
                 // Perform three times more analysis than the rxtx_threshold.
                 // This is to avoid bad race condition where it would take
                 // more time than needed to detect outages.
-                std::thread::sleep(
+                tokio::time::sleep(
                     Duration::from_millis(self.config.rxtx_threshold.div_ceil(3) as u64)
                         - duration_overall,
-                );
+                )
+                .await;
             }
         });
 
