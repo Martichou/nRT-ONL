@@ -9,7 +9,7 @@ name = "n-rt-onl"
 path = "src/bin.rs"
 
 [features]
-default = ["aya", "aya-log", "libc", "userspace"]
+default = ["aya", "aya-log", "libc"]
 userspace = ["once_cell"]
 
 [dependencies]

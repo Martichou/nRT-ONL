@@ -74,6 +74,11 @@ impl Onl {
         tokio::spawn(async move {
             // Need some inner state to know if we're in an "outage" or not
             let mut current = State::Ukn;
+            _ = cch_tx.send(State::Ukn).await;
+
+            // Delay the start of the analysis by rxtx_threshold.
+            // At first we don't have any stats, so no need to check anything
+            tokio::time::sleep(Duration::from_millis(self.config.rxtx_threshold as u64)).await;
 
             loop {
                 let start_overall = std::time::Instant::now();
