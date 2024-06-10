@@ -16,7 +16,7 @@ userspace = ["once_cell"]
 anyhow = "1"
 libc = { version = "0.2", optional = true }
 log = "0.4"
-pnet = "0.34"
+pnet = "0.35"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "net", "sync", "time"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = { version = "1.19", optional = true }
