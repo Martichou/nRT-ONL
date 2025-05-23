@@ -46,8 +46,8 @@ fn try_n_rt_onl_ebpf(ctx: TcContext, dir: PktDirection) -> Result<i32, ()> {
     }
 
 	let ipv4_hdr: Ipv4Hdr = ctx.load(EthHdr::LEN).map_err(|_| ())?;
-    let source_addr = u32::from_be(ipv4_hdr.src_addr);
-	let dest_addr = u32::from_be(ipv4_hdr.dst_addr);
+    let source_addr = u32::from_be_bytes(ipv4_hdr.src_addr);
+	let dest_addr = u32::from_be_bytes(ipv4_hdr.dst_addr);
 
 	let ip4_src = Ipv4Addr::from(source_addr);
 	let ip4_dst = Ipv4Addr::from(dest_addr);
